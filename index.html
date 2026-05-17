@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service Queue App</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Service Queue">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f7;margin:0;padding:16px;color:#1d1d1f}
+.container{max-width:1100px;margin:auto}
+.nav{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.nav button{border:0;border-radius:999px;padding:14px 18px;background:#e8e8ed;font-size:17px;cursor:pointer}
+.nav button.active{background:#000;color:#fff}
+.card{display:none;background:#fff;border-radius:24px;padding:22px;box-shadow:0 4px 16px rgba(0,0,0,.08);margin-bottom:18px}
+.card.active{display:block}
+h1{font-size:30px;margin:0 0 8px}.sub{color:#6e6e73;line-height:1.5;margin-bottom:16px}
+label{display:block;font-weight:700;margin-top:15px;margin-bottom:8px}
+input,select,textarea{width:100%;font-size:17px;padding:14px;border:1px solid #d2d2d7;border-radius:15px;background:#fff}
+textarea{min-height:100px}
+button.action{width:100%;border:0;border-radius:18px;background:#000;color:#fff;padding:17px;font-size:19px;margin-top:18px;cursor:pointer}
+button.gray{background:#e8e8ed;color:#1d1d1f}
+button.red{background:#ff3b30;color:#fff}
+.notice{margin-top:14px;padding:15px;border-radius:15px;background:#f2f2f2;line-height:1.55}
+.warn{background:#fff8e1;color:#8a5b00}.good{background:#e9f7ef;color:#0b6b2b}.bad{background:#ffecec;color:#b00020}
+.queue{margin-top:18px;background:#000;color:#fff;border-radius:20px;padding:22px;text-align:center}.queueNo{font-size:48px;font-weight:800}
+.box{background:#f5f5f7;border-radius:18px;padding:15px;margin-top:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.case{border:1px solid #e5e5ea;border-radius:18px;padding:14px;margin-top:12px;line-height:1.55;background:#fff}
+.badge{display:inline-block;padding:5px 10px;border-radius:999px;background:#f2f2f2;font-size:13px;margin:3px 4px 3px 0}
+.case-actions{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px}
+.case-actions button{border:0;border-radius:12px;padding:11px;background:#e8e8ed;cursor:pointer}
+.case-actions button.red{background:#ff3b30;color:#fff}
+.detail{display:none;margin-top:12px;padding:14px;border-radius:14px;background:#f5f5f7}.detail.active{display:block}
+.lock{max-width:420px;margin:auto}
+.loading{text-align:center;padding:20px;color:#6e6e73;}
+@media(max-width:760px){.grid,.case-actions{grid-template-columns:1fr}.nav{flex-direction:column}.nav button{text-align:left}h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="nav">
+<button id="tabCustomer" class="active" type="button">Customer Queue / ลงคิวลูกค้า</button>
+<button id="tabCheck" type="button">Check Queue / เช็คคิว</button>
+<button id="tabStaff" type="button">Staff Dashboard / เจ้าหน้าที่</button>
+<button id="tabSettings" type="button">Store Settings / ตั้งค่าร้าน</button>
+</div>
+
+<section id="customer" class="card active">
+<h1>Service Queue App</h1>
+<div class="sub">ลูกค้าสแกน QR เพื่อกรอกคิว / Customers can scan QR to register</div>
+<div id="storeInfo" class="notice"></div>
+
+<form id="queueForm">
+<label>Full Name / ชื่อ - นามสกุล</label>
+<input id="customerName" required placeholder="Full name / กรอกชื่อ">
+
+<label>Phone Number / เบอร์โทรศัพท์</label>
+<input id="customerPhone" required inputmode="tel" placeholder="08X-XXX-XXXX">
+
+<label>Service Type / ประเภทบริการ</label>
+<select id="serviceType" required>
+<option value="">-- Select Service / เลือกบริการ --</option>
+<optgroup label="Apple ID">
+<option>สมัคร Apple ID / Create Apple ID</option>
+<option>Apple ID ติดล็อค / จำรหัสผ่านไม่ได้ / Locked or forgot password</option>
+</optgroup>
+<optgroup label="Software / Social">
+<option>ปรึกษาเรื่อง Software / Software Support</option>
+<option>Social: LINE / Facebook / Instagram / TikTok</option>
+</optgroup>
+<optgroup label="Service / Warranty">
+<option>ส่งเคลมสินค้า 3rd Party อยู่ในประกัน / 3rd Party Warranty Claim</option>
+<option>ส่งเคลมประกัน Cover+ / Cover+ Claim</option>
+<option>สินค้ามีปัญหาภายใน 7 วัน / Product issue within 7 days</option>
+</optgroup>
+<optgroup label="Document / Pickup">
+<option>ติดต่อขอรีพรินท์ใบเสร็จ / Receipt Reprint</option>
+<option>รับสินค้าออนไลน์ / Online Order Pickup</option>
+</optgroup>
+</select>
+
+<div id="infoBox"></div>
+<div id="extraFields"></div>
+
+<label>Issue Detail / รายละเอียดอาการหรือปัญหาเพิ่มเติม</label>
+<textarea id="issueDetail" placeholder="Please describe your issue / อธิบายปัญหาเพิ่มเติม"></textarea>
+
+<button class="action" type="submit" id="submitBtn">Submit Queue / รับคิวบริการ</button>
+</form>
+<div id="result"></div>
+</section>
+
+<section id="check" class="card">
+<h1>Check Queue</h1>
+<div class="sub">ลูกค้าเช็คได้ว่าใกล้ถึงคิวหรือยัง</div>
+<label>Queue Number / เลขคิว</label>
+<input id="checkQueueNo" placeholder="เช่น A001">
+<button class="action" id="checkBtn" type="button">Check Status / เช็คสถานะ</button>
+<div class="notice warn">หากถึงคิวแล้วลูกค้าไม่ได้อยู่ในคิว กรุณาลงทะเบียนใหม่<br>If your queue has been called and you are not present, please register again.</div>
+<div id="checkResult"></div>
+</section>
+
+<section id="staff" class="card">
+<div id="staffLock" class="lock">
+<h1>Staff Login</h1>
+<div class="sub">ใส่รหัสพนักงาน เพื่อบันทึกว่าเครื่อง/คนนี้เป็นใคร</div>
+<input id="staffPass" type="password" inputmode="numeric" placeholder="Staff Code">
+<button class="action" id="staffLoginBtn" type="button">Login / เข้าสู่ระบบ</button>
+</div>
+
+<div id="staffContent" style="display:none">
+<h1>Staff Dashboard</h1>
+<div class="notice good" id="staffWho"></div>
+
+<div class="box" style="background: #f4f4f7; border: 2px dashed #007aff; margin-bottom: 20px;">
+  <strong style="color: #007aff;">⚙️ ตั้งค่าระบบฐานข้อมูลกลางหลังบ้าน (Google Apps Script Web App)</strong>
+  <p style="margin: 5px 0 10px 0; font-size: 14px; color: #6e6e73;">วางลิงก์ Web App URL ที่ได้จาก Google Apps Script (สำคัญมาก: เพื่อใช้แชร์ข้อมูลร่วมกันทุกเครื่องและคิวอัพเดทจริง):</p>
+  <input id="lineUrlInput" placeholder="https://script.google.com/macros/s/.../exec" style="background: #fff; margin-bottom: 10px;">
+  <button type="button" id="saveLineBtn" class="action" style="margin-top: 0; padding: 12px; font-size: 16px; border-radius: 12px; background: #007aff;">💾 บันทึกตั้งค่าลิงก์ระบบกลาง</button>
+</div>
+
+<div class="grid">
+<div>
+<label>Filter Status / สถานะ</label>
+<select id="filterStatus">
+<option>ทั้งหมด / All</option>
+<option>Waiting</option>
+<option>Called</option>
+<option>In Progress</option>
+<option>Completed</option>
+<option>Missed</option>
+</select>
+</div>
+<div>
+<label>Current Device Staff / เครื่องนี้ล็อกอินโดย</label>
+<input id="currentStaff" disabled>
+</div>
+</div>
+<button class="action gray" id="refreshBtn" type="button">Refresh / รีเฟรชข้อมูลคิว</button>
+<button class="action gray" id="exportBtn" type="button">Export CSV / ดาวน์โหลดข้อมูลย้อนหลัง</button>
+<div id="caseList"></div>
+</div>
+</section>
+
+<section id="settings" class="card">
+<div id="settingsLock" class="lock">
+<h1>Settings Login</h1>
+<input id="settingsPass" type="password" inputmode="numeric" placeholder="Password">
+<button class="action" id="settingsLoginBtn" type="button">Login / เข้าสู่ระบบ</button>
+</div>
+
+<div id="settingsContent" style="display:none">
+<h1>Store Settings</h1>
+<label>Store Contact Number / เบอร์ติดต่อร้าน</label>
+<input id="storePhone" value="0851558196">
+<div class="grid">
+<div><label>Opening Time / เวลาเปิด</label><input id="openTime" type="time" value="10:00"></div>
+<div><label>Closing Time / เวลาปิด</label><input id="closeTime" type="time" value="20:30"></div>
+</div>
+<label>Special Service Hours / เวลาให้บริการพิเศษ</label>
+<select id="specialHours">
+<option value="">ไม่มี / Normal hours</option>
+<option value="12:15-20:30">12:15-20:30</option>
+<option value="closed">ปิดให้บริการ / Closed</option>
+</select>
+<label>Announcement / ประกาศเพิ่มเติม</label>
+<textarea id="announcement" placeholder="เช่น วันนี้รับคิว Service ถึง 20:00"></textarea>
+<button class="action" id="saveSettingsBtn" type="button">Save Settings / บันทึกตั้งค่า</button>
+</div>
+</section>
+
+</div>
+
+<script>
+if("serviceWorker" in navigator){navigator.serviceWorker.register("service-worker.js").catch(()=>{});}
+
+const STAFF_CODES={
+ "114":"Admin",
+ "101":"Staff 101",
+ "102":"Staff 102",
+ "103":"Staff 103"
+};
+const ADMIN_PASS="114";
+const $=id=>document.getElementById(id);
+
+// ตัวแปรเก็บข้อมูลเคสในหน่วยความจำของหน้าเว็บชั่วคราว (จะดึงใหม่จากเซอร์เวอร์เสมอ)
+let globalCases = [];
+
+const getSettings=()=>JSON.parse(localStorage.getItem("sq_settings_v8")||'{"phone":"0851558196","open":"10:00","close":"20:30","special":"","announcement":""}');
+const setSettings=d=>localStorage.setItem("sq_settings_v8",JSON.stringify(d));
+const getStaff=()=>JSON.parse(localStorage.getItem("sq_staff_v8")||"null");
+const setStaff=d=>localStorage.setItem("sq_staff_v8",JSON.stringify(d));
+const nowText=()=>new Date().toLocaleString("th-TH",{dateStyle:"short",timeStyle:"medium"});
+
+// โหลดลิงก์เชื่อมต่อระบบที่เคยบันทึกไว้
+document.addEventListener("DOMContentLoaded", () => {
+  if($("lineUrlInput")) $("lineUrlInput").value = localStorage.getItem("sq_line_url") || "";
+  // ดึงข้อมูลคิวเริ่มต้นทันทีถ้าเชื่อมลิงก์แล้ว
+  fetchCasesFromServer();
+});
+
+function showTab(name){
+ document.querySelectorAll(".card").forEach(x=>x.classList.remove("active"));
+ document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+ $(name).classList.add("active");
+ const map={customer:"tabCustomer",check:"tabCheck",staff:"tabStaff",settings:"tabSettings"};
+ $(map[name]).classList.add("active");
+ if(name==="staff") initStaffView();
+ if(name==="customer") renderStoreInfo();
+ if(name==="settings" && $("settingsContent").style.display!=="none") loadSettings();
+}
+
+function renderStoreInfo(){
+ const s=getSettings();
+ const hours=s.special==="closed"?"Closed / ปิดให้บริการ":(s.special || `${s.open}-${s.close}`);
+ $("storeInfo").innerHTML=`<strong>Store Contact / เบอร์ติดต่อร้าน:</strong> ${s.phone}<br><strong>Service Hours / เวลาให้บริการ:</strong> ${hours}<br><strong>Current Time / เวลาปัจจุบัน:</strong> ${nowText()}<br>${s.announcement?`<strong>Announcement / ประกาศ:</strong> ${s.announcement}`:""}`;
+}
+
+function loadSettings(){
+ const s=getSettings();
+ $("storePhone").value=s.phone; $("openTime").value=s.open; $("closeTime").value=s.close; $("specialHours").value=s.special; $("announcement").value=s.announcement;
+}
+
+function saveSettings(){
+ setSettings({phone:$("storePhone").value,open:$("openTime").value,close:$("closeTime").value,special:$("specialHours").value,announcement:$("announcement").value});
+ alert("บันทึกตั้งค่าร้านเรียบร้อย"); renderStoreInfo();
+}
+
+function initStaffView(){
+ const staff=getStaff();
+ if(staff){
+  $("staffLock").style.display="none";
+  $("staffContent").style.display="block";
+  $("staffWho").innerHTML=`Logged in as / เข้าใช้งานโดย: <strong>${staff.name}</strong><br>Staff Code: ${staff.code}<br>Device login time: ${staff.loginAt}`;
+  $("currentStaff").value=`${staff.name} (${staff.code})`;
+  
+  if($("saveLineBtn")) {
+    $("saveLineBtn").onclick = () => {
+      const url = $("lineUrlInput").value.trim();
+      localStorage.setItem("sq_line_url", url);
+      alert("💾 บันทึกตั้งค่าลิงก์ระบบกลางสำเร็จ! เริ่มดึงข้อมูลใหม่จากระบบ...");
+      fetchCasesFromServer();
+    };
+  }
+  renderCases();
+ }
+}
+
+function loginStaff(){
+ const code=$("staffPass").value.trim();
+ if(STAFF_CODES[code]){
+  const staff={code,name:STAFF_CODES[code],loginAt:nowText()};
+  setStaff(staff);
+  initStaffView();
+ }else alert("รหัสพนักงานไม่ถูกต้อง");
+}
+
+function loginSettings(){
+ if($("settingsPass").value===ADMIN_PASS){$("settingsLock").style.display="none";$("settingsContent").style.display="block";loadSettings()}else alert("รหัสไม่ถูกต้อง");
+}
+
+function serviceChanged(){
+ const service=$("serviceType").value; $("infoBox").innerHTML=""; $("extraFields").innerHTML="";
+ if(service.includes("Apple ID")) $("infoBox").innerHTML=`<div class="notice warn"><strong>Recommendation / คำแนะนำ:</strong><br>Contact Apple Hotline / ติดต่อ Apple Hotline<br>9:00 - 18:00<br>1800 019 900</div>`;
+ if(service.includes("Receipt Reprint")) $("extraFields").innerHTML=`<div class="box"><strong>Receipt Reprint Information / ข้อมูลรีพรินท์ใบเสร็จ</strong><label>Receipt Owner Name / ชื่อเจ้าของใบเสร็จ</label><input id="receiptOwner"><label>Requester / ผู้มาติดต่อ</label><select id="receiptReceiver"><option>Owner / เจ้าของมาติดต่อเอง</option><option>Authorized person / ไม่ใช่เจ้าของ มีหนังสือมอบอำนาจ</option></select><div class="notice">If not the owner, authorization letter is required.<br>หากไม่ใช่เจ้าของ ต้องมีหนังสือมอบอำนาจ</div></div>`;
+ if(service.includes("Online Order Pickup")) $("extraFields").innerHTML=`<div class="box"><strong>Online Pickup Information / ข้อมูลรับสินค้าออนไลน์</strong><label>Sale Order Number / เลขที่ Sale Order</label><input id="saleOrder"><label>Order Date / วันที่สั่งซื้อ</label><input type="date" id="orderDate"><label>Product Detail / รายละเอียดสินค้า</label><textarea id="productDetail"></textarea><label>Pickup Person / ผู้รับสินค้า</label><select id="pickupPerson"><option>Owner / เจ้าของมารับเอง</option><option>Representative / ให้ผู้อื่นมารับแทน</option></select><div class="notice">If a representative picks up the item, please prepare signed authorization document and the representative’s original ID card.<br>หากให้ผู้อื่นรับแทน ต้องมีสำเนาเอกสารเซ็นรับรอง และบัตรประชาชนตัวจริงของผู้มารับแทน</div></div>`;
+}
+
+function getExtra(service){
+ const d={};
+ if(service.includes("Receipt Reprint")){d.receiptOwner=$("receiptOwner")?.value||"";d.receiptReceiver=$("receiptReceiver")?.value||""}
+ if(service.includes("Online Order Pickup")){d.saleOrder=$("saleOrder")?.value||"";d.orderDate=$("orderDate")?.value||"";d.productDetail=$("productDetail")?.value||"";d.pickupPerson=$("pickupPerson")?.value||""}
+ return d;
+}
+
+// ฟังก์ชันดึงข้อมูลทั้งหมดจากฐานข้อมูลกลาง (Google Sheets หลังบ้าน)
+async function fetchCasesFromServer() {
+  const webAppUrl = localStorage.getItem("sq_line_url");
+  if (!webAppUrl) return;
+  
+  if($("caseList")) $("caseList").innerHTML = `<div class="loading">🔄 กำลังโหลดข้อมูลคิวล่าสุดจากระบบกลาง...</div>`;
+  
+  try {
+    const res = await fetch(`${webAppUrl}?action=getCases`);
+    const data = await res.json();
+    globalCases = data || [];
+    renderCases();
+  } catch (err) {
+    console.error("Error fetching data:", err);
+    if($("caseList")) $("caseList").innerHTML = `<div class="notice bad">❌ ไม่สามารถเชื่อมต่อฐานข้อมูลหลักได้ กรุณาตรวจสอบลิงก์สคริปต์หลังบ้าน</div>`;
+  }
+}
+
+// ลูกค้าส่งข้อมูลจองคิว
+async function submitQueue(e){
+ e.preventDefault();
+ const s=getSettings();
+ if(s.special==="closed"){alert("วันนี้ปิดให้บริการ / Service is closed today");return}
+ 
+ const name=$("customerName").value.trim(), phone=$("customerPhone").value.trim(), service=$("serviceType").value, detail=$("issueDetail").value.trim();
+ if(!name||!phone||!service){alert("กรุณากรอกข้อมูลให้ครบ / Please complete required fields");return}
+ 
+ const webAppUrl = localStorage.getItem("sq_line_url");
+ if(!webAppUrl) {
+   alert("ระบบขัดข้อง: หน้าร้านยังไม่ได้ตั้งค่าเซิร์ฟเวอร์หลักหลังบ้าน (Google Apps Script Web App URL) กรุณาแจ้งสตาฟ");
+   return;
+ }
+
+ $("submitBtn").disabled = true;
+ $("submitBtn").innerText = "Processing... / กำลังบันทึกคิว...";
+
+ const newQueue = {
+   action: "create",
+   id: Date.now(),
+   name,
+   phone,
+   service,
+   detail,
+   extra: JSON.stringify(getExtra(service))
+ };
+
+ try {
+   // ส่งข้อมูลไปเซิร์ฟเวอร์เพื่อคำนวณและสร้างเลขคิว
+   const response = await fetch(webAppUrl, {
+     method: "POST",
+     body: JSON.stringify(newQueue)
+   });
+   const result = await response.json();
+   
+   if(result && result.queue) {
+     $("result").innerHTML = `<div class="queue"><div>Queue Submitted / รับคิวเรียบร้อย</div><div class="queueNo">${result.queue}</div><div>Registered at / เวลาลงทะเบียน: ${result.createdAt}</div></div><div class="notice warn">กรุณารอใกล้บริเวณร้าน หากถึงคิวแล้วลูกค้าไม่ได้อยู่ในคิว กรุณาลงทะเบียนใหม่<br>If your queue has been called and you are not present, please register again.</div>`;
+     $("queueForm").reset(); $("infoBox").innerHTML=""; $("extraFields").innerHTML="";
+     fetchCasesFromServer(); // อัพเดทข้อมูลในระบบใหม่
+   } else {
+     throw new Error("Invalid response");
+   }
+ } catch(err) {
+   alert("เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่อีกครั้ง");
+   console.log(err);
+ } finally {
+   $("submitBtn").disabled = false;
+   $("submitBtn").innerText = "Submit Queue / รับคิวบริการ";
+ }
+}
+
+// ลูกค้าตรวจสอบสถานะคิว
+async function checkQueue(){
+ const q=$("checkQueueNo").value.trim().toUpperCase();
+ if(!q) return;
+ 
+ const webAppUrl = localStorage.getItem("sq_line_url");
+ if(!webAppUrl) return;
+ 
+ $("checkResult").innerHTML = "Checking...";
+ 
+ try {
+   const res = await fetch(`${webAppUrl}?action=getCases`);
+   const all = await res.json();
+   globalCases = all || [];
+   
+   const item=all.find(c=>c.queue.toUpperCase()===q);
+   if(!item){$("checkResult").innerHTML=`<div class="notice bad">ไม่พบเลขคิวนี้ / Queue not found</div>`;return}
+   
+   const before=all.filter(c=>c.status==="Waiting" && Number(c.id)<Number(item.id)).length;
+   let msg="", cls="notice";
+   if(item.status==="Waiting"){if(before===0){msg="ใกล้ถึงคิวแล้ว กรุณาเตรียมตัวใกล้บริเวณร้าน / Your queue is coming soon.";cls="notice warn"}else msg=`ยังรอคิวอยู่ มีคิวก่อนหน้าประมาณ ${before} คิว / Waiting. About ${before} queue(s) before you.`}
+   if(item.status==="Called"){msg="ถึงคิวแล้ว กรุณาติดต่อเจ้าหน้าที่ / Your queue has been called.";cls="notice good"}
+   if(item.status==="In Progress"){msg="กำลังให้บริการ / Service in progress.";cls="notice good"}
+   if(item.status==="Completed"){msg="ให้บริการเสร็จสิ้นแล้ว / Service completed.";cls="notice good"}
+   if(item.status==="Missed"){msg="คิวนี้ถูกข้ามแล้ว กรุณาลงทะเบียนใหม่ / This queue was missed. Please register again.";cls="notice bad"}
+   $("checkResult").innerHTML=`<div class="${cls}"><strong>${item.queue}</strong><br>${msg}<br><span class="badge">${item.status}</span><br>Registered at / เวลาลงทะเบียน: ${item.createdAt}</div>`;
+ } catch(e) {
+   $("checkResult").innerHTML="Error fetching status.";
+ }
+}
+
+function renderCases(){
+ let all = globalCases, filter=$("filterStatus").value;
+ if(filter!=="ทั้งหมด / All") all=all.filter(c=>c.status===filter);
+ if(!all.length){if($("caseList")) $("caseList").innerHTML=`<div class="notice">ยังไม่มีข้อมูลคิว</div>`;return}
+ 
+ if($("caseList")) {
+   $("caseList").innerHTML=all.map(c=>`
+   <div class="case">
+   <strong>${c.queue}</strong> <span class="badge">${c.status}</span><span class="badge">${c.staff||"No staff"}</span><br>
+   <strong>${c.name}</strong> | ${c.phone}<br>${c.service}<br>
+   <span class="small">Registered: ${c.createdAt} ${c.updatedAt?`| Updated: ${c.updatedAt}`:""}</span>
+   <div class="case-actions">
+   <button type="button" onclick="toggleDetail(${c.id})">รายละเอียด</button>
+   <button type="button" onclick="updateCase(${c.id},'Called')">เรียกคิว</button>
+   <button type="button" onclick="updateCase(${c.id},'In Progress')">รับเรื่อง</button>
+   <button type="button" onclick="updateCase(${c.id},'Completed')">เสร็จสิ้น</button>
+   <button type="button" onclick="updateCase(${c.id},'Waiting')">รอคิว</button>
+   <button type="button" class="red" onclick="updateCase(${c.id},'Missed')">ลูกค้าไม่อยู่</button>
+   </div>
+   <div class="detail" id="detail-${c.id}">
+   <div class="notice"><strong>วันที่เวลาลงทะเบียน:</strong> ${c.createdAt}<br><strong>เจ้าหน้าที่ล่าสุด:</strong> ${c.staff||"-"}<br><strong>รายละเอียด:</strong> ${escapeHtml(c.detail||"-")}<br>${extraText(c.extra)}</div>
+   <label>แก้ไขชื่อ</label><input id="edit-name-${c.id}" value="${escapeHtml(c.name)}">
+   <label>แก้ไขเบอร์</label><input id="edit-phone-${c.id}" value="${escapeHtml(c.phone)}">
+   <label>แก้ไขรายละเอียด</label><textarea id="edit-detail-${c.id}">${escapeHtml(c.detail||"")}</textarea>
+   <button class="action gray" type="button" onclick="saveEdit(${c.id})">Save Edit / บันทึกแก้ไข</button>
+   </div>
+   </div>`).join("");
+ }
+}
+
+function escapeHtml(t){return String(t||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+function extraText(e){
+  if(!e)return"";
+  try {
+    const obj = typeof e === 'string' ? JSON.parse(e) : e;
+    return Object.entries(obj).filter(([k,v])=>v).map(([k,v])=>`<strong>${k}</strong>: ${escapeHtml(v)}<br>`).join("");
+  } catch(err) { return ""; }
+}
+function toggleDetail(id){$(`detail-${id}`).classList.toggle("active")}
+
+// เจ้าหน้าที่แก้ไขข้อมูลเคสและเซฟกลับไปยังหลังบ้าน
+async function saveEdit(id){
+ const staff=getStaff();
+ if(!staff){alert("กรุณา Login พนักงานก่อน");return}
+ const webAppUrl = localStorage.getItem("sq_line_url");
+ if(!webAppUrl) return;
+
+ const updatedData = {
+   action: "update",
+   id: id,
+   name: $(`edit-name-${id}`).value,
+   phone: $(`edit-phone-${id}`).value,
+   detail: $(`edit-detail-${id}`).value,
+   staff: `${staff.name} (${staff.code})`
+ };
+
+ try {
+   await fetch(webAppUrl, { method: "POST", body: JSON.stringify(updatedData) });
+   fetchCasesFromServer();
+ } catch(e) { alert("แก้ไขไม่สำเร็จ"); }
+}
+
+// เจ้าหน้าที่อัพเดทสถานะคิว (เช่น เรียกคิว, เสร็จสิ้น)
+async function updateCase(id,status){
+ const staff=getStaff();
+ if(!staff){alert("กรุณา Login พนักงานก่อน");return}
+ const webAppUrl = localStorage.getItem("sq_line_url");
+ if(!webAppUrl) return;
+
+ const updatedStatus = {
+   action: "updateStatus",
+   id: id,
+   status: status,
+   staff: `${staff.name} (${staff.code})`
+ };
+
+ try {
+   await fetch(webAppUrl, { method: "POST", body: JSON.stringify(updatedStatus) });
+   fetchCasesFromServer();
+ } catch(e) { alert("อัพเดทสถานะไม่สำเร็จ"); }
+}
+
+function exportCSV(){
+ const rows=[["Queue","Name","Phone","Service","Detail","Status","Staff","RegisteredAt","UpdatedAt","CalledAt","CompletedAt"]];
+ globalCases.forEach(c=>rows.push([c.queue,c.name,c.phone,c.service,c.detail,c.status,c.staff,c.createdAt,c.updatedAt,c.calledAt,c.completedAt]));
+ const csv=rows.map(r=>r.map(x=>`"${String(x||"").replaceAll('"','""')}"`).join(",")).join("\n");
+ const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);a.download="service_queue_history.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+$("tabCustomer").onclick=()=>showTab("customer");
+$("tabCheck").onclick=()=>showTab("check");
+$("tabStaff").onclick=()=>showTab("staff");
+$("tabSettings").onclick=()=>showTab("settings");
+$("queueForm").addEventListener("submit",submitQueue);
+$("serviceType").addEventListener("change",serviceChanged);
+$("checkBtn").onclick=checkQueue;
+$("staffLoginBtn").onclick=loginStaff;
+$("settingsLoginBtn").onclick=loginSettings;
+$("refreshBtn").onclick=fetchCasesFromServer;
+$("exportBtn").onclick=exportCSV;
+$("saveSettingsBtn").onclick=saveSettings;
+$("filterStatus").addEventListener("change",renderCases);
+renderStoreInfo();
+</script>
+</body>
+</html>
